@@ -1,2 +1,6 @@
 Flask
 requests
+Flask-Session
+cs50
+geopy
+werkzeug
