@@ -1,2 +1,2 @@
-def fetch_restaurants():
-    return
+import sqlite3
+print(sqlite3.version)
