@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+
+{% block title %} Analysis {% endblock %}
+
+{% block main %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <h1>Analysis</h1>
+    <canvas id="incomeChart" class="chart-canvas"></canvas>
+    <script>
+        var incomeCategories = {{ income_categories | tojson }};
+        var incomeValues = {{ income_values | tojson }};
+        
+        var incomeCtx = document.getElementById('incomeChart').getContext('2d');
+        var incomeChart = new Chart(incomeCtx, {
+            type: 'bar',
+            data: {
+                labels: incomeCategories,
+                datasets: [{
+                    label: 'Income Amount',
+                    data: incomeValues,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>   
+    <h3>Expenses by Category</h3>
+    <canvas id="expensePieChart" class="chart-canvas"></canvas>
+    <script>
+        var expenseCategories = {{ expense_categories | tojson }};
+        var expenseValues = {{ expense_values | tojson }};
+        var expensePieCtx = document.getElementById('expensePieChart').getContext('2d');
+        var expensePieChart = new Chart(expensePieCtx, {
+        type: 'pie',
+        data: {
+            labels: expenseCategories,
+            datasets: [{
+                data: expenseValues,
+                backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(75, 192, 192, 0.2)'],
+                borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 206, 86, 1)', 'rgba(75, 192, 192, 1)'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true
+        }
+        });
+    </script>
+
+{% endblock %}

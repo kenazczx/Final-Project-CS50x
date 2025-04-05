@@ -5,32 +5,37 @@
 {% endblock %}
 
 {% block main %}
-    <form action="/register" method="post">
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="full_name" placeholder="Full Name" type="text">
-        </div>
-        <div class="mb-3">
-            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="Email" placeholder="Email" type="email">
-        </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="dob" placeholder="Date of Birth" type="date">
-        </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="username" placeholder="Username" type="text">
-        </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="password" placeholder="Password" type="password">
-        </div>
-        <div class="mb-3">
-            <label for="gender">Gender:</label>
-            <select id="gender" name="gender">
-                <option value="" selected disabled></option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-                <option value="prefer_not_to_say">Prefer not to say</option>
-            </select>
-        </div>
-        <button class="btn btn-primary" type="submit">Register</button>
-    </form>
+<div class="form-card">
+        <div class="form-title">Sign up</div>
+        <form action="/register" method="post" class="register-form">
+            <div class="mb-3">
+                <label for="full_name" class="form-label">Name</label>
+                <input class="form-control" name="name" placeholder="Name" type="text">
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input autocomplete="off" autofocus class="form-control" name="email" placeholder="Email" type="email">
+            </div>
+            <div class="mb-3">
+                <label for="dob" class="form-label">Date of Birth</label>
+                <input class="form-control" name="dob" placeholder="Date of Birth" type="date">
+            </div>
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input class="form-control" name="username" placeholder="Username" type="text">
+            </div>
+            <div class="mb-3">
+                <label for="balance" class="form-label">Balance to start with</label>
+                <input class="form-control" name="balance" placeholder="Balance" type="number" min="0" step="0.01">
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input class="form-control" name="password" placeholder="Password" type="password">
+            </div>
+            <button class="btn btn-primary" type="submit">Sign Up</button>
+            <div class="text-center mt-3">
+                <p>Already have an account? <a href="/login">Sign in</a></p>
+            </div>
+        </form>
+</div>
 {% endblock %}

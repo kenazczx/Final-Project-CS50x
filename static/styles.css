@@ -1,3 +1,7 @@
+* {
+    font-family: 'Poppins', sans-serif;
+}
+
 /* Size for brand */
 nav .navbar-brand
 {
@@ -21,7 +25,52 @@ nav .navbar-brand .green
 {
     color: #2e944b;
 }
-table
-{
-    
+
+.form-card {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 500px;
+    justify-content: center;
+    margin: 0 auto;
+}
+.form-title {
+    font-size: 30px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.flash-message {
+    text-align: center;
+    width: 100%;
+}
+
+.login-form {
+    background: white;
+    padding: 150px;
+    border-radius: 15px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 700px;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.login-title {
+    font-size: 30px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.chart-canvas {
+    display: flex;
+    justify-content: center;
+    margin-top: 50px;
+    margin-bottom: 50px;
+    width: 30vw;
+    height: 40vh;
 }
