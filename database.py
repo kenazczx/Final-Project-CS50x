@@ -40,3 +40,15 @@ CREATE TABLE IF NOT EXISTS user_totals (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+
+CREATE TABLE IF NOT EXISTS monthly_budgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    spent DECIMAL(10, 2) NOT NULL,
+    budget DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+);

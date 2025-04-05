@@ -25,9 +25,22 @@ db = SQL("sqlite:///budget_tracker.db")
 @app.route('/')
 @login_required
 def home():
+    current_date = datetime.now()
+    current_month = current_date.month
+    current_year = current_date.year
     default_income_categories = ["Salary", "Business", "Investment", "Rental"]
     default_expense_categories = ["Food", "Transport", "Entertainment", "Utilities"]
     user_id = session.get("user_id")
+    budgets = db.execute("SELECT budget, spent FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+    if budgets:
+        budget = float(budgets[0]["budget"])
+        spent = float(budgets[0]["spent"])
+        if budget > 0:
+            progress_percentage = round((spent / budget) * 100, 2)
+        else:
+            progress_percentage = 0
+    else:
+        progress_percentage = 0
     if not user_id:
         return redirect("/login")
     total_income = db.execute("SELECT total_income FROM user_totals WHERE user_id = ?", user_id)
@@ -43,7 +56,9 @@ def home():
         expense_categories = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = 'expense'", user_id)
         categories = default_expense_categories + [row["category"] for row in expense_categories]
     # Current Date
-    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories)
+    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage)
+
+
 @app.route('/get_time')
 @login_required
 def get_time():
@@ -58,6 +73,9 @@ def get_time():
 def add_transaction():
     if request.method == 'POST':
         user_id = session.get("user_id")
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
         amount = float(request.form.get('amount'))
         if not amount:
             flash("Please provide an amount!", "danger")
@@ -85,6 +103,8 @@ def add_transaction():
         elif transaction_type == "expense":
             db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", amount, user_id)
             db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
+            if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                db.execute("UPDATE monthly_budgets SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
         flash("Transaction added successfully!", "success")
         return redirect('/')
     else:
@@ -94,6 +114,9 @@ def add_transaction():
 @login_required
 def delete_transaction():
     if request.method == 'POST':
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
         user_id = session.get("user_id")
         transaction_id = request.form.get('transaction_id')
         transaction = db.execute("SELECT * FROM transactions WHERE id = ?", transaction_id)
@@ -101,12 +124,15 @@ def delete_transaction():
             trans = transaction[0]
             amount = float(trans["amount"])
             t_type = trans["transaction_type"]
+            date = trans["date"]
             if t_type == "income":
                 db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
             elif t_type == "expense":
                 db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", amount, user_id)
+                if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                    db.execute("UPDATE monthly_budgets SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
             db.execute("DELETE FROM transactions WHERE id = ?", transaction_id)
             flash("Transaction deleted successfully!", "success")
         return redirect('/')
@@ -115,6 +141,9 @@ def delete_transaction():
 @app.route('/edit-transaction/<int:transaction_id>', methods=['GET', 'POST'])
 @login_required
 def edit_transaction(transaction_id):
+    current_date = datetime.now()
+    current_month = current_date.month
+    current_year = current_date.year
     user_id = session.get("user_id")
     amount = float(request.form.get('amount'))
     if not amount:
@@ -151,9 +180,13 @@ def edit_transaction(transaction_id):
                 if new > 0:
                     db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", new, user_id)
                     db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", new, user_id)
+                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_budgets SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
                 if new < 0:
                     db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", abs(new), user_id)
                     db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", abs(new), user_id)
+                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_budgets SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
             return redirect('/')
         flash("Transaction edited successfully!", "success")
         return redirect('/')
@@ -271,3 +304,24 @@ def analysis():
     expense_values = expense_by_category.values.tolist()
 
     return render_template("analysis.html", income_categories=income_categories, income_values=income_values, expense_categories=expense_categories, expense_values=expense_values)
+
+@app.route('/set_budget', methods=['GET', 'POST'])
+@login_required
+def set_budget():
+    if request.method == 'POST':
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
+        user_id = session.get("user_id")
+        budget = float(request.form.get('budget'))
+        if not budget:
+            flash("Please provide a budget!", "danger")
+            return redirect('/')
+        if db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year):
+            db.execute("UPDATE monthly_budgets SET budget = ? WHERE user_id = ? AND month = ? AND year = ?", budget, user_id, current_month, current_year)
+        else:
+            db.execute("INSERT INTO monthly_budgets (budget, month, year, user_id) VALUES (?, ?, ?, ?)", budget, current_month, current_year, user_id)
+        flash("Budget set successfully!", "success")
+        return redirect('/')
+    else:
+        return redirect('/')

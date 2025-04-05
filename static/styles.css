@@ -74,3 +74,27 @@ nav .navbar-brand .green
     width: 30vw;
     height: 40vh;
 }
+
+    /* Progress Bar Container */
+    .progress-bar-container {
+        width: 100%;
+        background-color: #f3f3f3;
+        border-radius: 25px;
+        height: 30px;
+        margin-top: 10px;
+    }
+
+    /* Progress Bar */
+    .progress-bar {
+        height: 100%;
+        background-color: #4caf50;  /* Green by default */
+        text-align: center;
+        color: white;
+        line-height: 30px;
+        border-radius: 25px;
+        font-weight: bold;
+    }
+
+    .progress-bar-container {
+        margin-top: 20px;
+    }
