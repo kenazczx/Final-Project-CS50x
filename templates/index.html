@@ -4,23 +4,23 @@
 
 {% block main %}
     <div class="container">
-        <h1 class="mt-5">Dashboard</h1>
+        <h1 class="mt-2" style="">Dashboard</h1>
         <div id="time" class="text-center mb-4"></div>
         <!-- Display balance, total income, and total expenses -->
-        <div class="row">
-            <div class="col-md-4">
+        <div class="row mb-3">
+            <div class="col-md-6">
                 <div class="card text-white bg-success">
                     <div class="card-body">
-                        <h5 class="card-title">Total Money In (Income)</h5>
+                        <h5 class="card-title">Total Lifetime Money In (Income)</h5>
                         <p class="card-text">${{ total_income }}</p>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card text-white bg-danger">
                     <div class="card-body">
-                        <h5 class="card-title">Total Money Out (Expenses)</h5>
+                        <h5 class="card-title">Total Lifetime Money Out (Expenses)</h5>
                         {% if total_expenses > 0 %}
                             <p class="card-text">-${{ total_expenses }}</p>
                         {% else %}
@@ -29,7 +29,9 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+        </div>
+        <div class="row mb-3">
+            <div class="col-12">
                 <div class="card text-white bg-primary">
                     <div class="card-body">
                         <h5 class="card-title">Balance</h5>
@@ -38,12 +40,37 @@
                 </div>
             </div>
         </div>
+        <div class="row">
+    <!-- Monthly Income -->
+            <div class="col-md-6">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h5 class="card-title">Monthly Income</h5>
+                        <p class="card-text">${{ monthly_income }}</p>
+                    </div>
+                </div>
+            </div>
+
+    <!-- Monthly Expenses -->
+            <div class="col-md-6">
+                <div class="card text-white bg-warning">
+                    <div class="card-body">
+                        <h5 class="card-title">Monthly Expenses</h5>
+                        {% if monthly_spent > 0 %}
+                            <p class="card-text">-${{ monthly_spent }}</p>
+                        {% else %}
+                            <p class="card-text">${{ monthly_spent }}</p>
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
         <h2>Monthly Budget Usage</h2>
-        {% if budget > 0 %}
+        {% if monthly_budget > 0 %}
         <div class="d-flex justify-content-center gap-2 mb-4">
-            <div><strong>Spent:</strong> ${{ spent }}</div>
-            <div><strong>Budget:</strong> ${{ budget }}</div>
-            <div><strong>Remaining:</strong> ${{ budget - spent }}</div>
+            <div><strong>Spent:</strong> ${{ monthly_spent }}</div>
+            <div><strong>Budget:</strong> ${{ monthly_budget }}</div>
+            <div><strong>Remaining:</strong> ${{ monthly_budget - monthly_spent }}</div>
         </div>
         {% else %}
             <p>No budget set yet.</p>

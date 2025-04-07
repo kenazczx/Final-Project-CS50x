@@ -31,16 +31,20 @@ def home():
     default_income_categories = ["Salary", "Business", "Investment", "Rental"]
     default_expense_categories = ["Food", "Transport", "Entertainment", "Utilities"]
     user_id = session.get("user_id")
-    budgets = db.execute("SELECT budget, spent FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+    budgets = db.execute("SELECT budget, spent, income FROM monthly_totals WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
     if budgets:
-        budget = float(budgets[0]["budget"])
-        spent = float(budgets[0]["spent"])
-        if budget > 0:
-            progress_percentage = round((spent / budget) * 100, 2)
+        monthly_budget = float(budgets[0]["budget"])
+        monthly_spent = float(budgets[0]["spent"])
+        monthly_income = float(budgets[0]["income"])
+        if monthly_budget > 0:
+            progress_percentage = round((monthly_spent / monthly_budget) * 100, 2)
         else:
             progress_percentage = 0
     else:
         progress_percentage = 0
+        monthly_budget = 0
+        monthly_spent = 0
+        monthly_income = 0
     if not user_id:
         return redirect("/login")
     total_income = db.execute("SELECT total_income FROM user_totals WHERE user_id = ?", user_id)
@@ -56,7 +60,7 @@ def home():
         expense_categories = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = 'expense'", user_id)
         categories = default_expense_categories + [row["category"] for row in expense_categories]
     # Current Date
-    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage, budget=budget, spent=spent)
+    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage, monthly_budget=monthly_budget, monthly_spent=monthly_spent, monthly_income=monthly_income)
 
 
 @app.route('/get_time')
@@ -80,6 +84,9 @@ def add_transaction():
         if not amount:
             flash("Please provide an amount!", "danger")
             return redirect('/')
+        if amount < 0:
+            flash("Amount cannot be negative!", "danger")
+            return redirect('/')
         category_initial = request.form.get('category')
         if not category_initial:
             flash("Please provide a category!", "danger")
@@ -100,11 +107,13 @@ def add_transaction():
         if transaction_type == "income":
             db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", amount, user_id)
             db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", amount, user_id)
+            if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
         elif transaction_type == "expense":
             db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", amount, user_id)
             db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
             if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                db.execute("UPDATE monthly_budgets SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
         flash("Transaction added successfully!", "success")
         return redirect('/')
     else:
@@ -128,11 +137,13 @@ def delete_transaction():
             if t_type == "income":
                 db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
+                if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
             elif t_type == "expense":
                 db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", amount, user_id)
                 if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                    db.execute("UPDATE monthly_budgets SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                    db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
             db.execute("DELETE FROM transactions WHERE id = ?", transaction_id)
             flash("Transaction deleted successfully!", "success")
         return redirect('/')
@@ -148,6 +159,9 @@ def edit_transaction(transaction_id):
     amount = float(request.form.get('amount'))
     if not amount:
         flash("Please provide an amount!", "danger")
+        return redirect('/')
+    if amount < 0:
+        flash("Amount cannot be negative!", "danger")
         return redirect('/')
     category = request.form.get('category')
     if not category:
@@ -172,21 +186,25 @@ def edit_transaction(transaction_id):
                 if new > 0:
                     db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", new, user_id)
                     db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", new, user_id)
+                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
                 if new < 0:
                     db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?",abs(new), user_id)
                     db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", abs(new), user_id)
+                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
+                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
             elif transaction_type == "expense":
                 new = amount - current_transaction["amount"]
                 if new > 0:
                     db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", new, user_id)
                     db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", new, user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_budgets SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
+                        db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
                 if new < 0:
                     db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", abs(new), user_id)
                     db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", abs(new), user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_budgets SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
+                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
             return redirect('/')
         flash("Transaction edited successfully!", "success")
         return redirect('/')
@@ -323,10 +341,13 @@ def set_budget():
             if not budget:
                 flash("Please provide a valid budget!", "danger")
                 return redirect('/')
-            if db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year):
-                db.execute("UPDATE monthly_budgets SET budget = ? WHERE user_id = ? AND month = ? AND year = ?", budget, user_id, current_month, current_year)
+            if budget < 0:
+                flash("Budget cannot be negative!", "danger")
+                return redirect('/')
+            if db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year):
+                db.execute("UPDATE monthly_totals SET budget = ? WHERE user_id = ? AND month = ? AND year = ?", budget, user_id, current_month, current_year)
             else:
-                db.execute("INSERT INTO monthly_budgets (budget, month, year, user_id) VALUES (?, ?, ?, ?)", budget, current_month, current_year, user_id)
+                db.execute("INSERT INTO monthly_totals (budget, month, year, user_id) VALUES (?, ?, ?, ?)", budget, current_month, current_year, user_id)
             flash("Budget set successfully!", "success")
             return redirect('/')
         elif "reset_budget" in request.form:
@@ -334,12 +355,48 @@ def set_budget():
             current_month = current_date.month
             current_year = current_date.year
             user_id = session.get("user_id")
-            rows = db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+            rows = db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
             if rows[0]["budget"] == 0:
                 flash("No budget set for this month!", "danger")
                 return redirect('/')
-            db.execute("UPDATE monthly_budgets SET budget = 0 WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+            db.execute("UPDATE monthly_totals SET budget = 0 WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
             flash("Budget reset successfully!", "success")
             return redirect('/')
     else:
         return redirect('/')
+    
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    if request.method == "POST":
+        old_password = request.form.get("old_password")
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        hash_password = generate_password_hash(new_password)
+        user_id = session.get("user_id")
+        if not old_password:
+            flash("Please provide old password", "danger")
+            return redirect("/change_password")
+        if not new_password:
+            flash("Please provide new password", "danger")
+            return redirect("/change_password")
+        if not confirm_password:
+            flash("Please provide confirmation password", "danger")
+            return redirect("/change_password")
+        if new_password != confirm_password:
+            flash("Passwords don't match!", "danger")
+            return redirect("/change_password")
+        if old_password == new_password:
+            flash("Old password and new password is the same!", "danger")
+            return redirect("/change_password")
+        hash_db_dict = db.execute("SELECT hash FROM users WHERE id = ?", user_id)
+        hash_db = hash_db_dict[0]["hash"]
+        if not check_password_hash(hash_db, old_password):
+            flash("Old password entered is wrong!", "danger")
+            return redirect("/change_password")
+        db.execute("UPDATE users SET hash = ? WHERE id = ?", hash_password, user_id)
+        flash("Password changed successfully!", "success")
+        return redirect("/")
+    else:
+        return render_template("change_password.html")       
+        
