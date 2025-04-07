@@ -56,7 +56,7 @@ def home():
         expense_categories = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = 'expense'", user_id)
         categories = default_expense_categories + [row["category"] for row in expense_categories]
     # Current Date
-    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage)
+    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage, budget=budget, spent=spent)
 
 
 @app.route('/get_time')
@@ -198,7 +198,7 @@ def login():
     """Log user in"""
 
     # Forget any user_id
-
+    session.clear()
     # User reached route via POST (as by submitting a form via POST)
     if request.method == "POST":
         # Ensure username was submitted
@@ -305,23 +305,41 @@ def analysis():
 
     return render_template("analysis.html", income_categories=income_categories, income_values=income_values, expense_categories=expense_categories, expense_values=expense_values)
 
-@app.route('/set_budget', methods=['GET', 'POST'])
+@app.route('/budget', methods=['GET', 'POST'])
 @login_required
 def set_budget():
     if request.method == 'POST':
-        current_date = datetime.now()
-        current_month = current_date.month
-        current_year = current_date.year
-        user_id = session.get("user_id")
-        budget = float(request.form.get('budget'))
-        if not budget:
-            flash("Please provide a budget!", "danger")
+        if "set_budget" in request.form:
+            current_date = datetime.now()
+            current_month = current_date.month
+            current_year = current_date.year
+            user_id = session.get("user_id")
+            budget = request.form.get('budget')
+            try:
+                budget = float(budget)
+            except ValueError:
+                flash("Please provide a valid budget!", "danger")
+                return redirect('/')
+            if not budget:
+                flash("Please provide a valid budget!", "danger")
+                return redirect('/')
+            if db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year):
+                db.execute("UPDATE monthly_budgets SET budget = ? WHERE user_id = ? AND month = ? AND year = ?", budget, user_id, current_month, current_year)
+            else:
+                db.execute("INSERT INTO monthly_budgets (budget, month, year, user_id) VALUES (?, ?, ?, ?)", budget, current_month, current_year, user_id)
+            flash("Budget set successfully!", "success")
             return redirect('/')
-        if db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year):
-            db.execute("UPDATE monthly_budgets SET budget = ? WHERE user_id = ? AND month = ? AND year = ?", budget, user_id, current_month, current_year)
-        else:
-            db.execute("INSERT INTO monthly_budgets (budget, month, year, user_id) VALUES (?, ?, ?, ?)", budget, current_month, current_year, user_id)
-        flash("Budget set successfully!", "success")
-        return redirect('/')
+        elif "reset_budget" in request.form:
+            current_date = datetime.now()
+            current_month = current_date.month
+            current_year = current_date.year
+            user_id = session.get("user_id")
+            rows = db.execute("SELECT * FROM monthly_budgets WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+            if rows[0]["budget"] == 0:
+                flash("No budget set for this month!", "danger")
+                return redirect('/')
+            db.execute("UPDATE monthly_budgets SET budget = 0 WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
+            flash("Budget reset successfully!", "success")
+            return redirect('/')
     else:
         return redirect('/')
