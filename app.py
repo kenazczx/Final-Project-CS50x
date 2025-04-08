@@ -3,14 +3,31 @@ from flask_session import Session
 from cs50 import SQL
 from geopy.geocoders import Nominatim
 from werkzeug.security import check_password_hash, generate_password_hash
-from helpers import login_required
+from helpers import login_required, cleanup_verification
 from datetime import datetime
 import pandas as pd
-import time
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+import os, random, time
+from dotenv import load_dotenv
+
+load_dotenv()  # Load variables from .env file
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
+
+# Optional: setup Flask-Mail using env vars
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_USE_TLS'] = True
 app.config['DEBUG'] = True
 app.config['ENV'] = 'development'
+
+mail = Mail(app)
+serailizer = URLSafeTimedSerializer(app.secret_key)
+
 if __name__ == "__main__":
     app.run(debug=True)
 
@@ -400,3 +417,76 @@ def change_password():
     else:
         return render_template("change_password.html")       
         
+@app.route("/forget_password", methods=["GET", "POST"])
+def forget_password():
+    if request.method == 'POST':
+        emails_dict = db.execute("SELECT email FROM users")
+        current_emails = emails_dict[0]["email"]
+        email = request.form.get("email")
+        if email in current_emails:
+            code = str(random.randint(000000, 999999))
+            msg = Message('Your Password Reset Code', sender=app.config['MAIL_USERNAME'], recipients=[email])
+            msg.body = f'Your verification code is: {code}'
+            mail.send(msg)
+
+            session["reset_email"] = email
+            session["reset_code"] = code
+            return redirect("/verify_code")
+        else:
+            flash("Email not in our database!", "danger")
+            return redirect("/")
+    else:
+        return render_template('forget_password.html')
+
+
+@app.route("/verify_code", methods=["GET", "POST"])
+def verify_code():
+    email = session.get("reset_email")
+    code = session.get("reset_code")
+    count = 0
+    if not email or not code:
+        flash("Access denied." "danger")
+        return redirect('/forget_password')
+    if request.method == "POST":
+        form_code = request.form.get("verification")
+        if code == form_code:
+            session["reset_status"] = True
+            return redirect("/reset_password")
+        else:
+            while count < 1:
+                count += 1
+                flash("Wrong verification code entered", "danger")
+                return redirect("/verify_code")
+            flash("Wrong verification code entered", "danger")
+            return redirect("/forget_password")
+            
+
+    else:
+        return render_template("verify_code.html")
+
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    status = session.get("reset_status")
+    email = session.get("reset_email")
+    code = session.get("reset_code")
+    if not email or not code or not status == True:
+        flash("Access denied", "danger")
+        return redirect("/forget_password")
+    if request.method == "POST":
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        hash_password = generate_password_hash(new_password)
+        if not new_password or not confirm_password:
+            flash("Please input new and confirmation password!", "danger")
+            return redirect("/reset_password")
+        if new_password != confirm_password:
+            flash("New and confirmation password is not the same!", "danger")
+            return redirect("/reset_password")
+        db.execute("UPDATE users SET hash = ? WHERE email = ?", hash_password, email)
+        flash("Password resetted successfully!", "success")
+        cleanup_verification()
+        return redirect("/")
+    else:
+        return render_template("reset_password.html")
+
+    

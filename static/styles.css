@@ -115,3 +115,21 @@ nav .navbar-brand .green
         margin-bottom: 15px;
         text-align: center;
     }
+
+    .forget-form {
+        background: white;
+        padding: 150px;
+        border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 700px;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    
+    .forget-title {
+        font-size: 30px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        text-align: center;
+    }

@@ -18,3 +18,9 @@ def login_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def cleanup_verification():
+    session.pop("reset_email", None)
+    session.pop("reset_code", None)
+    session.pop("reset_status", None)

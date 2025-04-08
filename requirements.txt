@@ -5,3 +5,6 @@ cs50
 geopy
 werkzeug
 pandas
+date-time
+itsdangerous
+Flask-Mail

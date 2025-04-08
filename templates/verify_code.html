@@ -1,0 +1,21 @@
+{% extends "layout.html" %} 
+
+{% block title %} Verification {% endblock %} 
+
+
+{% block main %} 
+
+<div class="forget-form">
+    <form action="/verify_code" method="post">
+        <div class="forget-title">Verification</div>
+        <div class="mb-3">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="verification" placeholder="Enter 6-digit code" type="text" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Submit</button>
+    </form>
+</div>
+
+
+
+
+{% endblock %}
