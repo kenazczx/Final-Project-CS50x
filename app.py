@@ -10,13 +10,15 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 import os, random, time
 from dotenv import load_dotenv
+from email.utils import formataddr
+import re
 
 load_dotenv()  # Load variables from .env file
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 
-# Optional: setup Flask-Mail using env vars
+
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
@@ -45,9 +47,8 @@ def home():
     current_date = datetime.now()
     current_month = current_date.month
     current_year = current_date.year
-    default_income_categories = ["Salary", "Business", "Investment", "Rental"]
-    default_expense_categories = ["Food", "Transport", "Entertainment", "Utilities"]
     user_id = session.get("user_id")
+    name = db.execute("SELECT name FROM users WHERE id = ?", user_id)
     budgets = db.execute("SELECT budget, spent, income FROM monthly_totals WHERE user_id = ? AND month = ? AND year = ?", user_id, current_month, current_year)
     if budgets:
         monthly_budget = float(budgets[0]["budget"])
@@ -68,18 +69,36 @@ def home():
     total_expenses = db.execute("SELECT total_expenses FROM user_totals WHERE user_id = ?", user_id)
     balance = db.execute("SELECT balance FROM user_totals WHERE user_id = ?", user_id)
     transactions = db.execute("SELECT id, amount, category, transaction_type, date FROM transactions WHERE user_id = ? ORDER BY date DESC", user_id)
-    transaction_type = request.args.get("transaction_type", None)
-    categories = []
-    if transaction_type == "income":
-        income_categories = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = 'income'", user_id)
-        categories = default_income_categories + [row["category"] for row in income_categories]
-    elif transaction_type == "expense":
-        expense_categories = db.execute("SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = 'expense'", user_id)
-        categories = default_expense_categories + [row["category"] for row in expense_categories]
     # Current Date
-    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, transaction_type=transaction_type, categories=categories, progress_percentage=progress_percentage, monthly_budget=monthly_budget, monthly_spent=monthly_spent, monthly_income=monthly_income)
+    return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, progress_percentage=progress_percentage, monthly_budget=monthly_budget, monthly_spent=monthly_spent, monthly_income=monthly_income, name=name)
 
+@app.route("/get_categories")
+@login_required
+def get_categories():
+    user_id = session.get("user_id")
+    transaction_type = request.args.get("type")
 
+    if transaction_type not in ["income", "expense"]:
+        return jsonify([])
+
+    db_categories = db.execute(
+        "SELECT DISTINCT category FROM transactions WHERE user_id = ? AND transaction_type = ?",
+        user_id, transaction_type
+    )
+
+    default_income = ["Salary", "Business", "Investment", "Rental"]
+    default_expense = ["Food", "Transport", "Entertainment", "Utilities"]
+
+    if transaction_type == "income":
+        categories = default_income + [row["category"] for row in db_categories if row["category"] not in default_income]
+    else:
+        categories = default_expense + [row["category"] for row in db_categories if row["category"] not in default_expense]
+
+    # Add "Others" at the end
+    if "Others" not in categories:
+        categories.append("Others")
+
+    return jsonify(categories)    
 @app.route('/get_time')
 @login_required
 def get_time():
@@ -112,6 +131,9 @@ def add_transaction():
             category = request.form.get('custom_category')
         else:
             category = category_initial
+        if not re.match("^[A-Za-z &-]+$", category.strip()):
+            flash("Category can only include letters, spaces, dashes, and '&'.", "danger")
+            return redirect("/")
         transaction_type = request.form.get('transaction_type')
         if not transaction_type:
             flash("Please provide a transaction type!", "danger")
@@ -286,32 +308,39 @@ def register():
         if not name:
             flash("Please provide a name!", "danger")
             return redirect("/register")
-        try:
-            email = request.form.get("email")
-            if not email:
-                flash("Please provide a email!", "danger")
-                return redirect("/register")
-        except ValueError:
-            return flash("Email already registered", "danger")
+        email = request.form.get("email")
+        if not email:
+            flash("Please provide a email!", "danger")
+            return redirect("/register")
+        existing_emails = db.execute("SELECT * FROM users WHERE email = ?", email)
+        if existing_emails:
+            flash("Email already registered", "danger")
+            return redirect("/register")
         dob = request.form.get("dob")
-        try:
-            username = request.form.get("username")
-            if not username:
-                flash("Please provide an username!", "danger")
-                return redirect("/register")
-        except ValueError:
-                flash("Username already taken!", "danger")
-                return redirect("/register")
+        username = request.form.get("username")
+        if not username:
+            flash("Please provide an username!", "danger")
+            return redirect("/register")
+        existing_usernames = db.execute("SELECT * FROM users WHERE username = ?", username)
+        if existing_usernames:
+            flash("Username already taken", "danger")
+            return redirect("/register")
         password = request.form.get("password")
         if not password:
-            return flash("Please provide a password!", "danger")
-        hash = generate_password_hash(password)
+            flash("Please provide a password!", "danger")
+            return redirect("/register")
         balance = request.form.get("balance")
-        db.execute("INSERT INTO users (name, email, date_of_birth, username, hash) VALUES (?, ?, ?, ?, ?)", name, email, dob, username, hash)
-        user = db.execute("SELECT id FROM users WHERE username = ?", username)
-        user_id = user[0]["id"]
-        db.execute("INSERT INTO user_totals (balance, user_id) VALUES (?, ?)", balance, user_id)
-        return redirect("/")
+        code = str(random.randint(100000, 999999))
+        msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
+        msg.body = f'Your verification code is: {code}'
+        msg.html = render_template("reset_code.html", code=code)
+        mail.send(msg)
+
+        session["pending_user"] = {"name": name, "email": email, "dob": dob, "username": username, "password": password, "balance": balance}
+        session["register_code"] = code
+        session["register_mode"] = True
+        session["register_time"] = time.time()
+        return redirect("/verify_code")
 
     else:
         return render_template('register.html')
@@ -424,40 +453,65 @@ def forget_password():
         current_emails = emails_dict[0]["email"]
         email = request.form.get("email")
         if email in current_emails:
-            code = str(random.randint(000000, 999999))
-            msg = Message('Your Password Reset Code', sender=app.config['MAIL_USERNAME'], recipients=[email])
+            code = str(random.randint(100000, 999999))
+            msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
             msg.body = f'Your verification code is: {code}'
+            msg.html = render_template("reset_code.html", code=code)
             mail.send(msg)
 
             session["reset_email"] = email
             session["reset_code"] = code
+            session["reset_time"] = time.time()
             return redirect("/verify_code")
         else:
             flash("Email not in our database!", "danger")
-            return redirect("/")
+            return redirect("/forget_password")
     else:
         return render_template('forget_password.html')
 
 
 @app.route("/verify_code", methods=["GET", "POST"])
 def verify_code():
-    email = session.get("reset_email")
-    code = session.get("reset_code")
+    email = session.get("reset_email") or (session["pending_user"]["email"] if "pending_user" in session else None)
+    code = session.get("reset_code") or session.get("register_code")
     count = 0
+    is_register = session.get("register_mode")
     if not email or not code:
         flash("Access denied." "danger")
         return redirect('/forget_password')
+    register_time = session.get("register_time")
+    reset_time = session.get("reset_time")
+    if register_time and (time.time() - register_time > 600):
+        session.clear()
+        flash("Verification code expired. Please try registering again.", "danger")
+        return redirect("/register")
+    if reset_time and (time.time() - reset_time > 600):
+        flash("Verification code expired. Please try request a new reset.", "danger")
+        return redirect("/forget_password")
     if request.method == "POST":
         form_code = request.form.get("verification")
         if code == form_code:
-            session["reset_status"] = True
-            return redirect("/reset_password")
+            if is_register:
+                user = session["pending_user"]
+                hashed_pw = generate_password_hash(user["password"])
+                db.execute("INSERT INTO users (name, email, date_of_birth, username, hash) VALUES (?, ?, ?, ?, ?)",
+                           user["name"], user["email"], user["dob"], user["username"], hashed_pw)
+                user_id = db.execute("SELECT id FROM users WHERE username = ?", user["username"])[0]["id"]
+                db.execute("INSERT INTO user_totals (balance, user_id) VALUES (?, ?)", user["balance"], user_id)
+
+                session.clear()
+                flash("Registration successful! Please log in.", "success")
+                return redirect("/login")               
+            else:
+                session["reset_status"] = True
+                return redirect("/reset_password")
         else:
             while count < 1:
                 count += 1
                 flash("Wrong verification code entered", "danger")
                 return redirect("/verify_code")
             flash("Wrong verification code entered", "danger")
+            cleanup_verification()
             return redirect("/forget_password")
             
 
@@ -471,7 +525,7 @@ def reset_password():
     code = session.get("reset_code")
     if not email or not code or not status == True:
         flash("Access denied", "danger")
-        return redirect("/forget_password")
+        return redirect("/")
     if request.method == "POST":
         new_password = request.form.get("new_password")
         confirm_password = request.form.get("confirm_password")
