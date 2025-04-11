@@ -68,7 +68,6 @@ def home():
     total_income = db.execute("SELECT total_income FROM user_totals WHERE user_id = ?", user_id)
     total_expenses = db.execute("SELECT total_expenses FROM user_totals WHERE user_id = ?", user_id)
     balance = db.execute("SELECT balance FROM user_totals WHERE user_id = ?", user_id)
-    transactions = db.execute("SELECT id, amount, category, transaction_type, date FROM transactions WHERE user_id = ? ORDER BY date DESC", user_id)
     # Current Date
     return render_template("index.html", total_income=total_income[0]["total_income"], total_expenses=total_expenses[0]["total_expenses"], balance=balance[0]["balance"], transactions=transactions, progress_percentage=progress_percentage, monthly_budget=monthly_budget, monthly_spent=monthly_spent, monthly_income=monthly_income, name=name)
 
@@ -119,29 +118,29 @@ def add_transaction():
         amount = float(request.form.get('amount'))
         if not amount:
             flash("Please provide an amount!", "danger")
-            return redirect('/')
+            return redirect('/transactions')
         if amount < 0:
             flash("Amount cannot be negative!", "danger")
-            return redirect('/')
+            return redirect('/transactions')
         category_initial = request.form.get('category')
         if not category_initial:
             flash("Please provide a category!", "danger")
-            return redirect('/')
+            return redirect('/transactions')
         if category_initial == "others":
             category = request.form.get('custom_category')
         else:
             category = category_initial
         if not re.match("^[A-Za-z &-]+$", category.strip()):
             flash("Category can only include letters, spaces, dashes, and '&'.", "danger")
-            return redirect("/")
+            return redirect('/transactions')
         transaction_type = request.form.get('transaction_type')
         if not transaction_type:
             flash("Please provide a transaction type!", "danger")
-            return redirect('/')
+            return redirect('/transactions')
         date = request.form.get('date')
         if not date:
             flash("Please provide a date!", "danger")
-            return redirect('/')
+            return redirect('/transactions')
         db.execute("INSERT INTO transactions (user_id, amount, category, transaction_type, date) VALUES (?, ?, ?, ?, ?)", user_id, amount, category, transaction_type, date)
         if transaction_type == "income":
             db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", amount, user_id)
@@ -154,9 +153,9 @@ def add_transaction():
             if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
                 db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
         flash("Transaction added successfully!", "success")
-        return redirect('/')
+        return redirect('/transactions')
     else:
-        return redirect('/')
+        return redirect('/transactions')
 
 @app.route('/delete_transaction', methods=['GET', 'POST'])
 @login_required
@@ -185,9 +184,9 @@ def delete_transaction():
                     db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
             db.execute("DELETE FROM transactions WHERE id = ?", transaction_id)
             flash("Transaction deleted successfully!", "success")
-        return redirect('/')
+        return redirect('/transactions')
     else:
-        return redirect('/')
+        return redirect('/transactions')
 @app.route('/edit-transaction/<int:transaction_id>', methods=['GET', 'POST'])
 @login_required
 def edit_transaction(transaction_id):
@@ -198,25 +197,31 @@ def edit_transaction(transaction_id):
     amount = float(request.form.get('amount'))
     if not amount:
         flash("Please provide an amount!", "danger")
-        return redirect('/')
+        return redirect('/transactions')
     if amount < 0:
         flash("Amount cannot be negative!", "danger")
-        return redirect('/')
+        return redirect('/transactions')
     category = request.form.get('category')
     if not category:
         flash("Please provide a category!", "danger")
-        return redirect('/')
+        return redirect('/transactions')
     transaction_type = request.form.get('transaction_type')
     if not transaction_type:
         flash("Please provide a transaction type!", "danger")
-        return redirect('/')
+        return redirect('/transactions')
     transaction_id = request.form.get('edit_transaction_id')
     date = request.form.get('date')
     if not date:
         flash("Please provide a date!", "danger")
-        return redirect('/')
+        return redirect('/transactions')
     current_transaction_dict = db.execute("SELECT * FROM transactions WHERE id = ? AND user_id = ?", transaction_id, user_id)
     current_transaction = current_transaction_dict[0]
+    stored_date = datetime.strptime(current_transaction["date"], '%Y-%m-%d').date()
+    stored_month = stored_date.month
+    stored_year = stored_date.year
+    new_date = datetime.strptime(date, '%Y-%m-%d').date()
+    new_month = new_date.month
+    new_year = new_date.year
     if request.method == 'POST':
         if current_transaction["amount"] != amount or current_transaction["category"] != category or current_transaction["transaction_type"] != transaction_type or current_transaction["date"] != date:
             db.execute("UPDATE transactions SET amount = ?, category = ?, transaction_type = ?, date= ? WHERE user_id = ? AND id = ?", amount, category, transaction_type, date, user_id, transaction_id)
@@ -227,11 +232,15 @@ def edit_transaction(transaction_id):
                     db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", new, user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
                         db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
+                    elif new_date != current_date or new_date.month != current_month or new_date.year != current_year:
+                        db.execute("UPDATE monthly_totals SET income = income - ?, month = ?, year = ? WHERE user_id = ? AND month = ? AND year = ?", amount, new_date.month, new_date.year, user_id, current_month, current_year)
                 if new < 0:
                     db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?",abs(new), user_id)
                     db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", abs(new), user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
+                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", abs(new), user_id, current_month, current_year)
+                    elif current_date != stored_date and stored_date.month != current_month:
+                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
             elif transaction_type == "expense":
                 new = amount - current_transaction["amount"]
                 if new > 0:
@@ -239,16 +248,20 @@ def edit_transaction(transaction_id):
                     db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", new, user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
                         db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
+                    elif current_date != stored_date and stored_date.month != current_month:
+                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
                 if new < 0:
                     db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", abs(new), user_id)
                     db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", abs(new), user_id)
                     if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
-            return redirect('/')
+                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", abs(new), user_id, current_month, current_year)
+                    elif current_date != stored_date and stored_date.month != current_month:
+                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+            return redirect('/transactions')
         flash("Transaction edited successfully!", "success")
-        return redirect('/')
+        return redirect('/transactions')
     else:
-        return redirect('/')
+        return redirect('/transactions')
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -418,7 +431,6 @@ def change_password():
         old_password = request.form.get("old_password")
         new_password = request.form.get("new_password")
         confirm_password = request.form.get("confirm_password")
-        hash_password = generate_password_hash(new_password)
         user_id = session.get("user_id")
         if not old_password:
             flash("Please provide old password", "danger")
@@ -440,9 +452,20 @@ def change_password():
         if not check_password_hash(hash_db, old_password):
             flash("Old password entered is wrong!", "danger")
             return redirect("/change_password")
-        db.execute("UPDATE users SET hash = ? WHERE id = ?", hash_password, user_id)
-        flash("Password changed successfully!", "success")
-        return redirect("/")
+        email_dict = db.execute("SELECT email FROM users WHERE id = ?", user_id)
+        email = email_dict[0]["email"]
+        code = str(random.randint(100000, 999999))
+        msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
+        msg.body = f'Your verification code is: {code}'
+        msg.html = render_template("reset_code.html", code=code)
+        mail.send(msg)
+
+        session["change_email"] = email
+        session["new_password"] = new_password
+        session["change_code"] = code
+        session["change_mode"] = True
+        session["change_time"] = time.time()        
+        return redirect("/verify_code")
     else:
         return render_template("change_password.html")       
         
@@ -472,15 +495,17 @@ def forget_password():
 
 @app.route("/verify_code", methods=["GET", "POST"])
 def verify_code():
-    email = session.get("reset_email") or (session["pending_user"]["email"] if "pending_user" in session else None)
-    code = session.get("reset_code") or session.get("register_code")
+    email = session.get("reset_email") or (session["pending_user"]["email"] if "pending_user" in session else None) or session.get("change_email")
+    code = session.get("reset_code") or session.get("register_code") or session.get("change_code")
     count = 0
     is_register = session.get("register_mode")
+    is_change = session.get("change_mode")
     if not email or not code:
         flash("Access denied." "danger")
         return redirect('/forget_password')
     register_time = session.get("register_time")
     reset_time = session.get("reset_time")
+    change_time = session.get("change_time")
     if register_time and (time.time() - register_time > 600):
         session.clear()
         flash("Verification code expired. Please try registering again.", "danger")
@@ -488,6 +513,10 @@ def verify_code():
     if reset_time and (time.time() - reset_time > 600):
         flash("Verification code expired. Please try request a new reset.", "danger")
         return redirect("/forget_password")
+    if change_time and (time.time() - change_time > 600):
+        cleanup_verification()
+        flash("Verification code expired. Please request to change password again.", "danger")
+        return redirect("/change_password")
     if request.method == "POST":
         form_code = request.form.get("verification")
         if code == form_code:
@@ -501,7 +530,15 @@ def verify_code():
 
                 session.clear()
                 flash("Registration successful! Please log in.", "success")
-                return redirect("/login")               
+                return redirect("/login")  
+            elif is_change:
+                new_password = session.get("new_password")
+                hash_password = generate_password_hash(new_password)
+                user_id_dict = db.execute("SELECT id FROM users WHERE email = ?", email)
+                user_id = user_id_dict[0]["id"]
+                db.execute("UPDATE users SET hash = ? WHERE id = ?", hash_password, user_id)
+                flash("Password changed successfully!", "success")
+                return redirect("/")             
             else:
                 session["reset_status"] = True
                 return redirect("/reset_password")
@@ -542,5 +579,12 @@ def reset_password():
         return redirect("/")
     else:
         return render_template("reset_password.html")
+
+@app.route("/transactions")
+@login_required
+def transactions():
+    user_id = session.get("user_id")
+    transactions = db.execute("SELECT id, amount, category, transaction_type, date FROM transactions WHERE user_id = ? ORDER BY date DESC", user_id)
+    return render_template("transactions.html", transactions=transactions)
 
     

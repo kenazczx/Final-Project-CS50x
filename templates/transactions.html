@@ -1,0 +1,157 @@
+{% extends "layout.html" %} 
+
+{% block title %} Transactions {% endblock %} 
+
+
+{% block main %} 
+        <h3 class="mt-4">Add Transaction</h3>
+        <form action="/add_transaction" method="post" class="row g-2 align-items-center">
+            <div class="col md-2">
+                <select class="form-select" name="transaction_type" id="transaction_type" required onchange="submitForm()">
+                    <option value="" disabled selected>Transaction Type</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                </select>
+            </div>
+            <div class="col md-2">
+                <select class="form-select" name="category" id="category" required>
+                    <option value="" disabled selected>Category</option>
+                </select>
+            </div>
+            <div class="col md-2">
+                <input class="form-control" name="amount" placeholder="Amount" type="number" step="0.01" required>
+            </div>
+            <div class="col md-2" id="customCategoryWrapper" style="display: none;">
+                <input class="form-control" name="custom_category" id="custom_category" placeholder="Add your own category" type="text">
+            </div>
+            <div class="col md-2">
+                <input class="form-control" name="date" placeholder="Date (YYYY-MM-DD)" type="date" required>
+            </div>
+            <div class="mb-3">
+                <button class="btn btn-primary" type="submit">Add Transaction</button>
+            </div>
+        </form>
+            <h3 class="mt-4">Transaction History</h3>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Transaction Type</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transaction in transactions %}
+                    <tr>
+                        <td class="col-md-2">{{ transaction.date }}</td>
+                        <td class="col-md-2">{{ transaction.category }}</td>
+                        <td class="col-md-2">{{ transaction.transaction_type.capitalize() }}</td>
+                        <td class="col-md-2">${{ transaction.amount }}</td>
+                        <td class="col-md-2">
+                        <button class="btn btn-sm btn-warning" onclick="toggleEditForm({{ transaction.id }})">Edit</button>
+                            <form action="/delete_transaction" method="post" class="d-inline">
+                                <input type="hidden" name="transaction_id" value="{{ transaction.id }}">
+                                <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr id="edit-form-{{ transaction.id }}" style="display: none;">
+                        <form action="/edit-transaction/{{ transaction.id }}" method="post" class="d-inline t">
+                            <input type="hidden" name="edit_transaction_id" value="{{ transaction.id }}">
+                            <td class="col-md-2 text-center">
+                                <input type="date" class="form-control text-center" name="date" value="{{ transaction.date }}" required>
+                            </td>
+                            <td class="col-md-2">
+                                <input class="form-control text-center" name="category" value="{{ transaction.category }}" placeholder="Category" type="text" required>
+                            </td>
+                            <td class="col-md-2">
+                                <select class="form-select" name="transaction_type" required>
+                                    <option class="text-center" value="income" {% if transaction.transaction_type == 'income' %} selected {% endif %}>Income</option>
+                                    <option class="text-center" value="expense" {% if transaction.transaction_type == 'expense' %} selected {% endif %}>Expense</option>
+                                </select>
+                            </td>
+                            <td class="col-md-2">
+                                <input class="form-control text-center" name="amount" value="{{ transaction.amount }}" placeholder="Amount" type="number" required>
+                            </td>
+                            <td class="col-md-2">
+                                <button type="submit" class="btn btn-sm btn-success">Save Changes</button>
+                            </td>
+                        </form>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">No transactions available.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+
+
+
+{% endblock %}
+
+{% block script %}
+    function toggleEditForm(transactionId) {
+            var formRow = document.getElementById('edit-form-' + transactionId);
+            formRow.style.display = formRow.style.display === 'none' ? 'table-row' : 'none';
+        }
+    document.addEventListener('DOMContentLoaded', function() {
+            const transactionTypeSelect = document.getElementById('transaction_type');
+            const categorySelect = document.getElementById('category');
+            const customCategoryWrapper = document.getElementById('customCategoryWrapper');
+
+            function updateCategories(type) {
+                fetch(`/get_categories?type=${type}`)
+                    .then(response => response.json())
+                    .then(categories => {
+                        // Clear existing options
+                        categorySelect.innerHTML = '<option value="" disabled selected>Category</option>';
+                        categories.forEach(cat => {
+                            const option = document.createElement("option");
+                            option.value = cat;
+                            option.textContent = cat;
+                            categorySelect.appendChild(option);
+                        });
+
+                        customCategoryWrapper.style.display = 'none';
+                    });
+            }
+
+            transactionTypeSelect.addEventListener('change', function () {
+                const selectedType = this.value;
+                if (selectedType === 'income' || selectedType === 'expense') {
+                    updateCategories(selectedType);
+                }
+            });
+            function handleCategorySelection() {
+                const selectedCategory = categorySelect.value;
+                if (selectedCategory === 'Others') {
+                    customCategoryWrapper.style.display = 'block';
+                } else {
+                    customCategoryWrapper.style.display = 'none';
+                }
+            }
+            categorySelect.addEventListener('change', handleCategorySelection);
+            document.querySelector('form[action="/add_transaction"]').addEventListener('submit', function (e) {
+                const categorySelect = document.getElementById('category');
+                const customInput = document.getElementById('custom_category');
+
+                if (categorySelect.value === 'Others' && customInput.value.trim() !== '') {
+                    // Create a hidden input to override the category
+                    const hiddenCategory = document.createElement('input');
+                    hiddenCategory.type = 'hidden';
+                    hiddenCategory.name = 'category';
+                    hiddenCategory.value = customInput.value.trim();
+                    this.appendChild(hiddenCategory);
+
+                    categorySelect.disabled = true;
+
+                }
+            });
+        })
+
+
+{% endblock %}
