@@ -115,13 +115,19 @@ def get_time():
 def add_transaction():
     if request.method == 'POST':
         user_id = session.get("user_id")
-        amount = float(request.form.get('amount'))
+        amount = request.form.get('amount')
         if not amount:
             flash("Please provide an amount!", "danger")
             return redirect('/transactions')
+        try:
+            amount = float(amount)
+        except ValueError:
+            flash("Enter a valid amount!", "danger")
+            return redirect('/transactions')
+        amount = float(amount)   
         if amount < 0:
             flash("Amount cannot be negative!", "danger")
-            return redirect('/transactions')
+            return redirect('/transactions')   
         category_initial = request.form.get('category')
         if not category_initial:
             flash("Please provide a category!", "danger")
@@ -262,11 +268,11 @@ def edit_transaction(transaction_id):
                         db.execute("INSERT INTO monthly_totals (user_id, spent, month, year) VALUES (?, ?, ?, ?)", user_id, amount, new_month, new_year)
                     else:
                         db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, new_month, new_year)
-                    flash("Transaction edited successfully!", "success")
-                else:
-                    flash("No change made to transaction!", "success")
+            flash("Transaction edited successfully!", "success")
             return redirect('/transactions')
-        return redirect('/transactions')
+        else:
+            flash("No changes made to transaction!", "success")
+            return redirect('/transactions')
     else:
         return redirect('/transactions')
 
@@ -350,17 +356,22 @@ def register():
             flash("Please provide a password!", "danger")
             return redirect("/register")
         balance = request.form.get("balance")
-        code = str(random.randint(100000, 999999))
-        msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
-        msg.body = f'Your verification code is: {code}'
-        msg.html = render_template("reset_code.html", code=code)
-        mail.send(msg)
+        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if re.match(email_regex, email):
+            code = str(random.randint(100000, 999999))
+            msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
+            msg.body = f'Your verification code is: {code}'
+            msg.html = render_template("reset_code.html", code=code)
+            mail.send(msg)
 
-        session["pending_user"] = {"name": name, "email": email, "dob": dob, "username": username, "password": password, "balance": balance}
-        session["register_code"] = code
-        session["register_mode"] = True
-        session["register_time"] = time.time()
-        return redirect("/verify_code")
+            session["pending_user"] = {"name": name, "email": email, "dob": dob, "username": username, "password": password, "balance": balance}
+            session["register_code"] = code
+            session["register_mode"] = True
+            session["register_time"] = time.time()
+            return redirect("/verify_code")
+        else:
+            flash("Submit a valid email", "danger")
+            return redirect("/register")
 
     else:
         return render_template('register.html')
@@ -458,17 +469,19 @@ def forget_password():
         emails_dict = db.execute("SELECT email FROM users")
         current_emails = emails_dict[0]["email"]
         email = request.form.get("email")
-        if email in current_emails:
-            code = str(random.randint(100000, 999999))
-            msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
-            msg.body = f'Your verification code is: {code}'
-            msg.html = render_template("reset_code.html", code=code)
-            mail.send(msg)
+        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if re.match(email_regex, email):
+            if email in current_emails:
+                code = str(random.randint(100000, 999999))
+                msg = Message('BudgetBuddy Verification Code', sender=formataddr(("BudgetBuddy", app.config['MAIL_USERNAME'])), recipients=[email])
+                msg.body = f'Your verification code is: {code}'
+                msg.html = render_template("reset_code.html", code=code)
+                mail.send(msg)
 
-            session["reset_email"] = email
-            session["reset_code"] = code
-            session["reset_time"] = time.time()
-            return redirect("/verify_code")
+                session["reset_email"] = email
+                session["reset_code"] = code
+                session["reset_time"] = time.time()
+                return redirect("/verify_code")
         else:
             flash("Email not in our database!", "danger")
             return redirect("/forget_password")

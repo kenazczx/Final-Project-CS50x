@@ -1,5 +1,8 @@
 # BudgetBuddy
-## Features (Still Completing)
+#### Video Demo:  <URL HERE>
+#### Description:
+
+## Features 
 
 - 🔐 **User Authentication**
   - Secure registration and login
@@ -16,10 +19,13 @@
   - Add, edit, and delete transactions
   - Income and expense categorization (with default and custom categories)
   - Smart UI toggle for custom category input
+  - Filter transactions by start/end date, transaction type and category
 
 - 📈 **Spending Analysis**
   - **Interactive charts powered by Chart.js**
-  - Income vs Expense breakdown by category (More features coming soon)
+  - Income & Expense breakdown by category 
+  - Income & Expense break down by month
+  - Filter data shown by month, start/end date and transaction type
   - Data processed and grouped using `pandas`
 
 - 💰 **Monthly Budget Control**
@@ -38,7 +44,7 @@
 - 🧰 **Tech Stack**
   - **Backend:** Flask, CS50 SQL (SQLite), Python
   - **Frontend:** HTML, Bootstrap, Jinja2, JavaScript, Chart.js
-  - **Libraries:** Flask-Mail, dotenv, pandas, itsdangerous
+  - **Libraries:** Flask-Mail, dotenv, pandas, itsdangerous, datetime, os, calender, re
  
 ## Screenshots
 
