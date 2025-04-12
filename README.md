@@ -1,6 +1,5 @@
 # BudgetBuddy
-#### Video Demo:  <URL HERE>
-#### Description:
+#### Video Demo:  https://www.youtube.com/watch?v=ep_mPxW_YM4&t=2s
 
 ## Features 
 
