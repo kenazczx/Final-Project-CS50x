@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, flash, jsonify
 from flask_session import Session
 from cs50 import SQL
-from geopy.geocoders import Nominatim
+''' from geopy.geocoders import Nominatim -> for location in the future '''
 from werkzeug.security import check_password_hash, generate_password_hash
 from helpers import login_required, cleanup_verification
 from datetime import datetime
@@ -467,7 +467,7 @@ def change_password():
 def forget_password():
     if request.method == 'POST':
         emails_dict = db.execute("SELECT email FROM users")
-        current_emails = emails_dict[0]["email"]
+        current_emails = [email["email"] for email in emails_dict]
         email = request.form.get("email")
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         if re.match(email_regex, email):
@@ -482,8 +482,11 @@ def forget_password():
                 session["reset_code"] = code
                 session["reset_time"] = time.time()
                 return redirect("/verify_code")
+            else:
+                flash("Email not in our database!", "danger")
+                return redirect("/forget_password")
         else:
-            flash("Email not in our database!", "danger")
+            flash("Invalid email format!", "danger")
             return redirect("/forget_password")
     else:
         return render_template('forget_password.html')
