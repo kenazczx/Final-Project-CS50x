@@ -12,6 +12,7 @@ import os, random, time
 from dotenv import load_dotenv
 from email.utils import formataddr
 import re
+import calendar
 
 load_dotenv()  # Load variables from .env file
 
@@ -65,6 +66,8 @@ def home():
         monthly_income = 0
     if not user_id:
         return redirect("/login")
+
+
     total_income = db.execute("SELECT total_income FROM user_totals WHERE user_id = ?", user_id)
     total_expenses = db.execute("SELECT total_expenses FROM user_totals WHERE user_id = ?", user_id)
     balance = db.execute("SELECT balance FROM user_totals WHERE user_id = ?", user_id)
@@ -112,9 +115,6 @@ def get_time():
 def add_transaction():
     if request.method == 'POST':
         user_id = session.get("user_id")
-        current_date = datetime.now()
-        current_month = current_date.month
-        current_year = current_date.year
         amount = float(request.form.get('amount'))
         if not amount:
             flash("Please provide an amount!", "danger")
@@ -141,17 +141,30 @@ def add_transaction():
         if not date:
             flash("Please provide a date!", "danger")
             return redirect('/transactions')
+        formatted_date = datetime.strptime(date, '%Y-%m-%d').date()
+        formatted_month = formatted_date.month
+        formatted_year = formatted_date.year
         db.execute("INSERT INTO transactions (user_id, amount, category, transaction_type, date) VALUES (?, ?, ?, ?, ?)", user_id, amount, category, transaction_type, date)
         if transaction_type == "income":
             db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", amount, user_id)
             db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", amount, user_id)
-            if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+            # TODO: Add income amount for transaction's month, year into monthly totals
+            # TODO: Check if exists
+            rows = db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? and year = ?", user_id, formatted_month, formatted_year)
+            if len(rows) != 1:
+                db.execute("INSERT INTO monthly_totals (user_id, income, month, year) VALUES (?, ?, ?, ?)", user_id, amount, formatted_month, formatted_year)
+            else:
+                db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, formatted_month, formatted_year)
         elif transaction_type == "expense":
             db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", amount, user_id)
             db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
-            if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+            # TODO: Add expense amount for transaction's month, year into monthly totals
+            # TODO: Check if exists
+            rows = db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? and year = ?", user_id, formatted_month, formatted_year)
+            if len(rows) != 1:
+                db.execute("INSERT INTO monthly_totals (user_id, spent, month, year) VALUES (?, ?, ?, ?)", user_id, amount, formatted_month, formatted_year)
+            else:
+                db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, formatted_month, formatted_year)
         flash("Transaction added successfully!", "success")
         return redirect('/transactions')
     else:
@@ -161,27 +174,26 @@ def add_transaction():
 @login_required
 def delete_transaction():
     if request.method == 'POST':
-        current_date = datetime.now()
-        current_month = current_date.month
-        current_year = current_date.year
         user_id = session.get("user_id")
         transaction_id = request.form.get('transaction_id')
         transaction = db.execute("SELECT * FROM transactions WHERE id = ?", transaction_id)
         if transaction:
             trans = transaction[0]
+            trans_date = datetime.strptime(trans["date"], '%Y-%m-%d').date()
+            trans_month = trans_date.month
+            trans_year = trans_date.year
             amount = float(trans["amount"])
             t_type = trans["transaction_type"]
-            date = trans["date"]
             if t_type == "income":
                 db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", amount, user_id)
-                if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                # TODO: Remove amount from the transaction's month monthly totals
+                db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, trans_month, trans_year)
             elif t_type == "expense":
                 db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", amount, user_id)
                 db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", amount, user_id)
-                if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                    db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                # TODO: Remove amount from the transaction's month monthly totals
+                db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, trans_month, trans_year)
             db.execute("DELETE FROM transactions WHERE id = ?", transaction_id)
             flash("Transaction deleted successfully!", "success")
         return redirect('/transactions')
@@ -190,9 +202,6 @@ def delete_transaction():
 @app.route('/edit-transaction/<int:transaction_id>', methods=['GET', 'POST'])
 @login_required
 def edit_transaction(transaction_id):
-    current_date = datetime.now()
-    current_month = current_date.month
-    current_year = current_date.year
     user_id = session.get("user_id")
     amount = float(request.form.get('amount'))
     if not amount:
@@ -227,38 +236,36 @@ def edit_transaction(transaction_id):
             db.execute("UPDATE transactions SET amount = ?, category = ?, transaction_type = ?, date= ? WHERE user_id = ? AND id = ?", amount, category, transaction_type, date, user_id, transaction_id)
             if transaction_type == "income":
                 new = amount - current_transaction["amount"]
-                if new > 0:
-                    db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", new, user_id)
-                    db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", new, user_id)
-                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
-                    elif new_date != current_date or new_date.month != current_month or new_date.year != current_year:
-                        db.execute("UPDATE monthly_totals SET income = income - ?, month = ?, year = ? WHERE user_id = ? AND month = ? AND year = ?", amount, new_date.month, new_date.year, user_id, current_month, current_year)
-                if new < 0:
-                    db.execute("UPDATE user_totals SET total_income = total_income - ? WHERE user_id = ?",abs(new), user_id)
-                    db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", abs(new), user_id)
-                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", abs(new), user_id, current_month, current_year)
-                    elif current_date != stored_date and stored_date.month != current_month:
-                        db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                db.execute("UPDATE user_totals SET total_income = total_income + ? WHERE user_id = ?", new, user_id)
+                db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", new, user_id)
+                if stored_date != new_date or stored_month != new_month or stored_year != stored_year:
+                    # TODO: Remove from transaction from old month's total
+                    db.execute("UPDATE monthly_totals SET income = income - ? WHERE user_id = ? AND month = ? AND year = ?", current_transaction["amount"], user_id, stored_month, stored_year)
+                    # TODO: Add transaction to new month's total
+                    # TODO: Check if monthly_totals for that month already exists
+                    rows = db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? and year = ?", user_id, new_month, new_year)
+                    if len(rows) != 1:
+                        db.execute("INSERT INTO monthly_totals (user_id, income, month, year) VALUES (?, ?, ?, ?)", user_id, amount, new_month, new_year)
+                    else:
+                        db.execute("UPDATE monthly_totals SET income = income + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, new_month, new_year)
             elif transaction_type == "expense":
                 new = amount - current_transaction["amount"]
-                if new > 0:
-                    db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", new, user_id)
-                    db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", new, user_id)
-                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", new, user_id, current_month, current_year)
-                    elif current_date != stored_date and stored_date.month != current_month:
-                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
-                if new < 0:
-                    db.execute("UPDATE user_totals SET total_expenses = total_expenses - ? WHERE user_id = ?", abs(new), user_id)
-                    db.execute("UPDATE user_totals SET balance = balance + ? WHERE user_id = ?", abs(new), user_id)
-                    if current_month == datetime.strptime(date, '%Y-%m-%d').month and current_year == datetime.strptime(date, '%Y-%m-%d').year:
-                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", abs(new), user_id, current_month, current_year)
-                    elif current_date != stored_date and stored_date.month != current_month:
-                        db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, current_month, current_year)
+                db.execute("UPDATE user_totals SET total_expenses = total_expenses + ? WHERE user_id = ?", new, user_id)
+                db.execute("UPDATE user_totals SET balance = balance - ? WHERE user_id = ?", new, user_id)
+                if stored_date != new_date or stored_month != new_month or stored_year != new_year:
+                    # TODO: Remove from transaction from old month's total
+                    db.execute("UPDATE monthly_totals SET spent = spent - ? WHERE user_id = ? AND month = ? AND year = ?", current_transaction["amount"], user_id, stored_month, stored_year)
+                    # TODO: Add transaction to new month's total
+                    # TODO: Check if monthly_totals for that month already exists
+                    rows = db.execute("SELECT * FROM monthly_totals WHERE user_id = ? AND month = ? and year = ?", user_id, new_month, new_year)
+                    if len(rows) != 1:
+                        db.execute("INSERT INTO monthly_totals (user_id, spent, month, year) VALUES (?, ?, ?, ?)", user_id, amount, new_month, new_year)
+                    else:
+                        db.execute("UPDATE monthly_totals SET spent = spent + ? WHERE user_id = ? AND month = ? AND year = ?", amount, user_id, new_month, new_year)
+                    flash("Transaction edited successfully!", "success")
+                else:
+                    flash("No change made to transaction!", "success")
             return redirect('/transactions')
-        flash("Transaction edited successfully!", "success")
         return redirect('/transactions')
     else:
         return redirect('/transactions')
@@ -357,30 +364,6 @@ def register():
 
     else:
         return render_template('register.html')
-    
-@app.route('/analysis')
-@login_required
-def analysis():
-    user_id = session.get("user_id")
-    if not user_id:
-        return redirect("/login")
-    transactions = db.execute("SELECT amount, category, transaction_type, date FROM transactions WHERE user_id = ?", user_id)
-    if not transactions:
-        flash("No transactions found, cannot analyse!", "danger")
-        return redirect('/')
-    df = pd.DataFrame(transactions)
-    df['date'] = pd.to_datetime(df['date'])
-
-    income_by_category = df[df['transaction_type'] == 'income'].groupby('category')['amount'].sum()
-    expense_by_category = df[df['transaction_type'] == 'expense'].groupby('category')['amount'].sum()
-
-    income_categories = income_by_category.index.tolist()
-    income_values = income_by_category.values.tolist()
-
-    expense_categories = expense_by_category.index.tolist()
-    expense_values = expense_by_category.values.tolist()
-
-    return render_template("analysis.html", income_categories=income_categories, income_values=income_values, expense_categories=expense_categories, expense_values=expense_values)
 
 @app.route('/budget', methods=['GET', 'POST'])
 @login_required
@@ -584,7 +567,90 @@ def reset_password():
 @login_required
 def transactions():
     user_id = session.get("user_id")
-    transactions = db.execute("SELECT id, amount, category, transaction_type, date FROM transactions WHERE user_id = ? ORDER BY date DESC", user_id)
-    return render_template("transactions.html", transactions=transactions)
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    trans_type = request.args.get("type")
+    category = request.args.get("category")
+
+    query = "SELECT id, amount, category, transaction_type, date FROM transactions WHERE user_id = ?"
+    params = [user_id]
+
+    if start:
+        query += " AND date >= ?"
+        params.append(start)
+    if end:
+        query += " AND date <= ?"
+        params.append(end)
+    if trans_type and trans_type != "all":
+        query += " AND transaction_type = ?"
+        params.append(trans_type)
+    if category:
+        query += " AND category LIKE ?"
+        params.append(category)
+    
+    query += " ORDER BY date DESC"
+    transactions = db.execute(query, *params)
+    today_str = datetime.today().date().isoformat()
+    today = datetime.today().date()
+    year = today.year
+    month = today.month
+    _, last_day = calendar.monthrange(2025, 4) # _, means ignore the first value since calender returns (weekday of firstday, number of days in the month)
+    start_of_month = today.replace(day=1)
+    end_of_month = today.replace(day=last_day)
+    return render_template("transactions.html", transactions=transactions, today=today_str, start_of_month=start_of_month, end_of_month=end_of_month)
 
     
+@app.route('/transaction-analysis')
+def transaction_analysis():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 403
+
+    # Filters from query params
+    start_date = request.args.get("start")
+    end_date = request.args.get("end")
+    trans_type = request.args.get("type")  # 'income', 'expense', or 'all'
+
+    query = "SELECT * FROM transactions WHERE user_id = ?"
+    params = [user_id]
+
+    if start_date:
+        query += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?"
+        params.append(end_date)
+    if trans_type and trans_type != 'all':
+        query += " AND transaction_type = ?"
+        params.append(trans_type)
+
+    transactions = db.execute(query, *params)
+    df = pd.DataFrame(transactions)
+
+    income_by_category = {}
+    expense_by_category = {}
+    income_by_month = {}
+    expense_by_month = {}
+
+    # Process transactions if they exist
+    if not df.empty:
+        df['date'] = pd.to_datetime(df['date'])
+        df['month'] = df['date'].dt.to_period('M').astype(str)
+
+        if trans_type != 'expense':
+            income_df = df[df['transaction_type'] == 'income']
+            income_by_category = income_df.groupby('category')['amount'].sum().to_dict()
+            income_by_month = income_df.groupby('month')['amount'].sum().to_dict()
+
+        if trans_type != 'income':
+            expense_df = df[df['transaction_type'] == 'expense']
+            expense_by_category = expense_df.groupby('category')['amount'].sum().to_dict()
+            expense_by_month = expense_df.groupby('month')['amount'].sum().to_dict()
+
+    return jsonify({
+        "income_by_category": income_by_category,
+        "expense_by_category": expense_by_category,
+        "income_by_month": income_by_month,
+        "expense_by_month": expense_by_month
+    })

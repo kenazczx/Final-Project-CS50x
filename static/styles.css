@@ -133,3 +133,19 @@ nav .navbar-brand .green
         margin-bottom: 15px;
         text-align: center;
     }
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+        gap: 2rem;
+        align-items: start;
+    }
+    .chart-grid div {
+        background: white;
+        padding: 1rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    canvas {
+        width: 100% !important;
+        height: 300px !important;
+    }

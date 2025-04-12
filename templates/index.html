@@ -121,6 +121,132 @@
                 {% endif %}
             </div>
         </form>
+    <h1>Financial Overview</h1>
+    <div class="filter-section">
+    <h2>Filter Transactions</h2>
+
+    <div style="margin-bottom: 1rem;">
+        <label>Filter by Month:</label>
+        <input type="month" id="monthFilter">
+        <button onclick="filterByMonth()">Filter Month</button>
+        <button onclick="resetFilters()">Reset</button>
+    </div>
+
+    <label>Start Date:</label>
+    <input type="date" id="startDate">
+    <label>End Date:</label>
+    <input type="date" id="endDate">
+    <label>Type:</label>
+    <select id="transactionType">
+        <option value="all">All</option>
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+    </select>
+    <button onclick="loadCharts()">Apply Filters</button>
+    </div>
+
+
+    <div class="chart-grid">
+    <div>
+        <h2>Income by Category</h2>
+        <canvas id="incomeCategoryChart"></canvas>
+    </div>
+    <div>
+        <h2>Expense by Category</h2>
+        <canvas id="expenseCategoryChart"></canvas>
+    </div>
+    <div>
+        <h2>Income by Month</h2>
+        <canvas id="incomeMonthChart"></canvas>
+    </div>
+    <div>
+        <h2>Expense by Month</h2>
+        <canvas id="expenseMonthChart"></canvas>
+    </div>
+    </div>
+    <script>
+        function loadCharts() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const type = document.getElementById('transactionType').value;
+
+            const query = new URLSearchParams({
+                start: start,
+                end: end,
+                type: type
+            });
+
+            fetch('/transaction-analysis?' + query.toString())
+                .then(response => response.json())
+                .then(data => {
+                    const destroyIfExists = id => {
+                        const chart = Chart.getChart(id);
+                        if (chart) chart.destroy();
+                    };
+
+                    const drawChart = (canvasId, label, labels, values, type = 'bar') => {
+                        destroyIfExists(canvasId);
+                        if (!labels.length || !values.length) return;
+
+                        new Chart(document.getElementById(canvasId), {
+                            type: type,
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: label,
+                                    data: values,
+                                    borderWidth: 1,
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { display: true }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    };
+
+                    drawChart('incomeCategoryChart', 'Income by Category', Object.keys(data.income_by_category), Object.values(data.income_by_category));
+                    drawChart('expenseCategoryChart', 'Expense by Category', Object.keys(data.expense_by_category), Object.values(data.expense_by_category));
+                    drawChart('incomeMonthChart', 'Income by Month', Object.keys(data.income_by_month), Object.values(data.income_by_month), 'bar');
+                    drawChart('expenseMonthChart', 'Expense by Month', Object.keys(data.expense_by_month), Object.values(data.expense_by_month), 'bar');
+                });
+        }
+        function filterByMonth() {
+            const selected = document.getElementById('monthFilter').value; // Format: yyyy-mm
+            if (!selected) return;
+
+            const [year, month] = selected.split("-");
+            const start = `${year}-${month}-01`;
+
+            // Get the last day of the selected month
+            const end = new Date(year, month, 0).toISOString().split("T")[0];
+
+            // Update the existing date inputs too
+            document.getElementById('startDate').value = start;
+            document.getElementById('endDate').value = end;
+
+            loadCharts(); // Call chart loader with new values
+        }
+
+        function resetFilters() {
+            document.getElementById('monthFilter').value = "";
+            document.getElementById('startDate').value = "";
+            document.getElementById('endDate').value = "";
+            document.getElementById('transactionType').value = "all";
+            loadCharts();
+        }
+    </script>
+
 {% endblock %}
 
 {% block script %} 

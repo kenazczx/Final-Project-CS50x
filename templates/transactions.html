@@ -25,12 +25,39 @@
                 <input class="form-control" name="custom_category" id="custom_category" placeholder="Add your own category" type="text">
             </div>
             <div class="col md-2">
-                <input class="form-control" name="date" placeholder="Date (YYYY-MM-DD)" type="date" required>
+                <input class="form-control" name="date" placeholder="Date (YYYY-MM-DD)" type="date" value="{{ today }}" required>
             </div>
             <div class="mb-3">
                 <button class="btn btn-primary" type="submit">Add Transaction</button>
             </div>
         </form>
+            <h3 class="mt-4">Filter Transactions</h3>
+    <form method="GET" action="/transactions" class="row g-2 mb-4 align-items-center">
+        <div class="col-md-3">
+            <label for="start" class="form-label">Start Date</label>
+            <input type="date" id="start" name="start" class="form-control" value="{{ request.args.get('start', '') }}">
+        </div>
+        <div class="col-md-3">
+            <label for="end" class="form-label">End Date</label>
+            <input type="date" id="end" name="end" class="form-control" value="{{ request.args.get('end', '') }}">
+        </div>
+        <div class="col-md-3">
+            <label for="type" class="form-label">Transaction Type</label>
+            <select name="type" class="form-select">
+                <option value="all" {% if request.args.get('type') == 'all' %}selected{% endif %}>All</option>
+                <option value="income" {% if request.args.get('type') == 'income' %}selected{% endif %}>Income</option>
+                <option value="expense" {% if request.args.get('type') == 'expense' %}selected{% endif %}>Expense</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="category" class="form-label">Category</label>
+            <input type="text" name="category" id="category" class="form-control" value="{{ request.args.get('category', '') }}">
+        </div>
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-primary mt-2">Apply Filters</button>
+            <a href="/transactions" class="btn btn-secondary mt-2">Reset</a>
+        </div>
+    </form>
             <h3 class="mt-4">Transaction History</h3>
         <table class="table table-striped">
             <thead>
